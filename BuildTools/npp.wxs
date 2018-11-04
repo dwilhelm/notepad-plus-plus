@@ -31,7 +31,11 @@
             <Directory Id="ProgramFiles64Folder" Name="PFiles">
                 <Directory Id="INSTALLDIR" Name="Notepad++-$(var.Version)">
                     <Component Id="MainExecutable" Guid="86A1F97D-0F2D-4FF1-B204-309AD0C381A8" Win64="yes">
-                        <File Id="nppEXE" Name="notepad++.exe" DiskId="1" Source="notepad++.exe"  KeyPath="yes" />
+                        <File Id="nppEXE" Name="notepad++.exe" DiskId="1" Source="notepad++.exe"  KeyPath="yes">
+                            <Shortcut Id="StartMenu" Directory="ProgramMenuDir" Name="Notepad++"
+                                  WorkingDirectory="INSTALLDIR" Description="Notepad++" Advertise="yes" >
+                            </Shortcut>
+                        </File>
                     </Component>
                     <Component Id="SciLexerLibrary" Guid="C82D338C-79F8-4C63-BA75-BB1103675880" Win64="yes">
                         <File Id="SciLexerDLL" Name="SciLexer.dll" DiskId="1" Source="SciLexer.dll" KeyPath="yes" />
