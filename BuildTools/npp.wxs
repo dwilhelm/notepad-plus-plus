@@ -22,6 +22,8 @@
             Platform="x64"
         />
 
+        <Icon Id="notepadpp.exe" SourceFile="notepad++.exe" />
+
         <Media Id="1" Cabinet="npp.cab" EmbedCab="yes" DiskPrompt="CD-ROM #1" />
 
         <Property Id="DiskPrompt" Value="Notepad++ Installation [1]" />
@@ -32,7 +34,7 @@
                 <Directory Id="INSTALLDIR" Name="Notepad++-$(var.Version)">
                     <Component Id="MainExecutable" Guid="86A1F97D-0F2D-4FF1-B204-309AD0C381A8" Win64="yes">
                         <File Id="nppEXE" Name="notepad++.exe" DiskId="1" Source="notepad++.exe"  KeyPath="yes">
-                            <Shortcut Id="StartMenu" Directory="ProgramMenuDir" Name="Notepad++"
+                            <Shortcut Id="StartMenu" Directory="ProgramMenuDir" Name="Notepad++" Icon="notepadpp.exe"
                                   WorkingDirectory="INSTALLDIR" Description="Notepad++" Advertise="yes" >
                             </Shortcut>
                         </File>
