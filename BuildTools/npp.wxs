@@ -38,6 +38,13 @@
                                   WorkingDirectory="INSTALLDIR" Description="Notepad++" Advertise="yes" >
                             </Shortcut>
                         </File>
+                        <RegistryKey Root="HKCR" Key="*\shell\Notepad++">
+                            <RegistryValue Type="string" Value="Edit with Notepad++" />
+                            <RegistryValue Type="string" Name="Icon" Value="[INSTALLDIR]notepad++.exe" />
+                        </RegistryKey>
+                        <RegistryKey Root="HKCR" Key="*\shell\Notepad++\command">
+                            <RegistryValue Type="string" Value='"[INSTALLDIR]notepad++.exe" "%1"' />
+                        </RegistryKey>
                     </Component>
                     <Component Id="SciLexerLibrary" Guid="C82D338C-79F8-4C63-BA75-BB1103675880" Win64="yes">
                         <File Id="SciLexerDLL" Name="SciLexer.dll" DiskId="1" Source="SciLexer.dll" KeyPath="yes" />
