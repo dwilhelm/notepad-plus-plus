@@ -39,7 +39,7 @@
                             </Shortcut>
                         </File>
                         <RegistryKey Root="HKCR" Key="*\shell\Notepad++">
-                            <RegistryValue Type="string" Value="Edit with Notepad++" />
+                            <RegistryValue Type="string" Value="Edit with &amp;Notepad++" />
                             <RegistryValue Type="string" Name="Icon" Value="[INSTALLDIR]notepad++.exe" />
                         </RegistryKey>
                         <RegistryKey Root="HKCR" Key="*\shell\Notepad++\command">
