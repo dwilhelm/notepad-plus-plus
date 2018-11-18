@@ -31,7 +31,7 @@
         <Directory Id="TARGETDIR" Name="SourceDir">
 
             <Directory Id="ProgramFiles64Folder" Name="PFiles">
-                <Directory Id="INSTALLDIR" Name="Notepad++-$(var.Version)">
+                <Directory Id="INSTALLDIR" Name="Notepad++">
                     <Component Id="MainExecutable" Guid="86A1F97D-0F2D-4FF1-B204-309AD0C381A8" Win64="yes">
                         <File Id="nppEXE" Name="notepad++.exe" DiskId="1" Source="notepad++.exe"  KeyPath="yes">
                             <Shortcut Id="StartMenu" Directory="ProgramMenuDir" Name="Notepad++" Icon="notepadpp.exe"
@@ -53,7 +53,7 @@
             </Directory>
 
             <Directory Id="ProgramMenuFolder" Name="Programs">
-                <Directory Id="ProgramMenuDir" Name="Notepad++-$(var.Version)">
+                <Directory Id="ProgramMenuDir" Name="Notepad++">
                     <Component Id="ProgramMenuDir" Guid="70ABA2B5-60D7-4C89-82F8-BAFE4DAF464F">
                         <RemoveFolder Id="ProgramMenuDir" On="uninstall" />
                         <RegistryValue Root="HKCU" Key="Software\[Manufacturer]\[ProductName]" Type="string" Value="" KeyPath="yes" />
