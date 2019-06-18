@@ -189,6 +189,7 @@ public:
 	bool fileCloseAllGiven(const std::vector<int>& krvecBufferIndexes);
 	bool fileCloseAllToLeft();
 	bool fileCloseAllToRight();
+	bool fileCloseAllUnchanged();
 	bool fileSave(BufferID id = BUFFER_INVALID);
 	bool fileSaveAll();
 	bool fileSaveSpecific(const generic_string& fileNameToSave);
@@ -240,6 +241,7 @@ public:
 	bool replaceInFiles();
 	void setFindReplaceFolderFilter(const TCHAR *dir, const TCHAR *filters);
 	std::vector<generic_string> addNppComponents(const TCHAR *destDir, const TCHAR *extFilterName, const TCHAR *extFilter);
+	std::vector<generic_string> addNppPlugins(const TCHAR *extFilterName, const TCHAR *extFilter);
     int getHtmlXmlEncoding(const TCHAR *fileName) const;
 	HACCEL getAccTable() const{
 		return _accelerator.getAccTable();
@@ -300,8 +302,10 @@ private:
     AboutDlg _aboutDlg;
 	DebugInfoDlg _debugInfoDlg;
 	RunDlg _runDlg;
-	MD5FromFilesDlg _md5FromFilesDlg;
-	MD5FromTextDlg _md5FromTextDlg;
+	HashFromFilesDlg _md5FromFilesDlg;
+	HashFromTextDlg _md5FromTextDlg;
+	HashFromFilesDlg _sha2FromFilesDlg;
+	HashFromTextDlg _sha2FromTextDlg;
     GoToLineDlg _goToLineDlg;
 	ColumnEditorDlg _colEditorDlg;
 	WordStyleDlg _configStyleDlg;
@@ -345,7 +349,7 @@ private:
 	bool _isFolding = false;
 
 	//For Dynamic selection highlight
-	CharacterRange _prevSelectedRange;
+	Sci_CharacterRange _prevSelectedRange;
 
 	//Synchronized Scolling
 	struct SyncInfo final
@@ -453,7 +457,7 @@ private:
 	void checkMacroState();
 	void checkSyncState();
 	void dropFiles(HDROP hdrop);
-	void checkModifiedDocument();
+	void checkModifiedDocument(bool bCheckOnlyCurrentBuffer);
 
     void getMainClientRect(RECT & rc) const;
 	void staticCheckMenuAndTB() const;
@@ -586,6 +590,7 @@ private:
 	void wsTabConvert(spaceTab whichWay);
 	void doTrim(trimOp whichPart);
 	void removeEmptyLine(bool isBlankContained);
+	void removeDuplicateLines();
 	void launchAnsiCharPanel();
 	void launchClipboardHistoryPanel();
 	void launchFileSwitcherPanel();

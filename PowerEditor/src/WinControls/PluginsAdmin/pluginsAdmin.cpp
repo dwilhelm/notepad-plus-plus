@@ -42,6 +42,9 @@
 #include "verifySignedFile.h"
 #include "LongRunningOperation.h"
 
+#define TEXTFILE        256
+#define IDR_PLUGINLISTJSONFILE  101
+
 using namespace std;
 using nlohmann::json;
 
@@ -286,7 +289,7 @@ void PluginsAdminDlg::create(int dialogID, bool isRTL, bool msgDestParent)
 
 	const int topMarge = 42;
 
-	HWND hResearchLabel = ::GetDlgItem(_hSelf, IDC_PLUGINADM_RESEARCH_STATIC);
+	HWND hResearchLabel = ::GetDlgItem(_hSelf, IDC_PLUGINADM_SEARCH_STATIC);
 	RECT researchLabelRect;
 	::GetClientRect(hResearchLabel, &researchLabelRect);
 	researchLabelRect.left = rect.left;
@@ -294,7 +297,7 @@ void PluginsAdminDlg::create(int dialogID, bool isRTL, bool msgDestParent)
 	::MoveWindow(hResearchLabel, researchLabelRect.left, researchLabelRect.top, researchLabelRect.right, researchLabelRect.bottom, TRUE);
 	::InvalidateRect(hResearchLabel, nullptr, TRUE);
 
-	HWND hResearchEdit = ::GetDlgItem(_hSelf, IDC_PLUGINADM_RESEARCH_EDIT);
+	HWND hResearchEdit = ::GetDlgItem(_hSelf, IDC_PLUGINADM_SEARCH_EDIT);
 	RECT researchEditRect;
 	::GetClientRect(hResearchEdit, &researchEditRect);
 	researchEditRect.left = researchLabelRect.right + marge;
@@ -427,7 +430,7 @@ PluginsAdminDlg::PluginsAdminDlg()
 	PathAppend(_updaterFullPath, TEXT("gup.exe"));
 
 	// get plugin-list path
-	_pluginListFullPath = getPluginConfigPath();
+	_pluginListFullPath = pNppParameters->getPluginConfDir();
 
 #ifdef DEBUG // if not debug, then it's release
 	// load from nppPluginList.json instead of nppPluginList.dll
@@ -435,32 +438,6 @@ PluginsAdminDlg::PluginsAdminDlg()
 #else //RELEASE
 	PathAppend(_pluginListFullPath, TEXT("nppPluginList.dll"));
 #endif
-	;
-}
-
-generic_string PluginsAdminDlg::getPluginConfigPath() const
-{
-	NppParameters *pNppParameters = NppParameters::getInstance();
-	generic_string nppPluginsConfDir;
-
-	if (pNppParameters->isLocal())
-	{
-		nppPluginsConfDir = pNppParameters->getNppPath();
-	}
-	else
-	{
-		nppPluginsConfDir = pNppParameters->getAppDataNppDir();
-	}
-
-	PathAppend(nppPluginsConfDir, TEXT("plugins"));
-	PathAppend(nppPluginsConfDir, TEXT("Config"));
-
-	if (!::PathFileExists(nppPluginsConfDir.c_str()))
-	{
-		::CreateDirectory(nppPluginsConfDir.c_str(), NULL);
-	}
-
-	return nppPluginsConfDir;
 }
 
 bool PluginsAdminDlg::exitToInstallRemovePlugins(Operation op, const vector<PluginUpdateInfo*>& puis)
@@ -510,7 +487,17 @@ bool PluginsAdminDlg::exitToInstallRemovePlugins(Operation op, const vector<Plug
 		{
 			// add folder to operate
 			updaterParams += TEXT(" \"");
-			updaterParams += i->_folderName;
+			generic_string folderName = i->_folderName;
+			if (folderName.empty())
+			{
+				auto lastindex = i->_displayName.find_last_of(TEXT("."));
+				if (lastindex != generic_string::npos)
+					folderName = i->_displayName.substr(0, lastindex);
+				else
+					folderName = i->_displayName;	// This case will never occur, but in case if it occurs too
+													// just putting the plugin name, so that whole plugin system is not screewed.
+			}
+			updaterParams += folderName;
 			updaterParams += TEXT("\"");
 		}
 	}
@@ -576,6 +563,30 @@ bool PluginsAdminDlg::removePlugins()
 	return exitToInstallRemovePlugins(pa_remove, puis);
 }
 
+void PluginsAdminDlg::changeTabName(LIST_TYPE index, const TCHAR *name2change)
+{
+	TCITEM tie;
+	tie.mask = TCIF_TEXT;
+	tie.pszText = (TCHAR *)name2change;
+	TabCtrl_SetItem(_tab.getHSelf(), index, &tie);
+
+	TCHAR label[MAX_PATH];
+	_tab.getCurrentTitle(label, MAX_PATH);
+	::SetWindowText(_hSelf, label);
+}
+
+void PluginsAdminDlg::changeColumnName(COLUMN_TYPE index, const TCHAR *name2change)
+{
+	_availableList.changeColumnName(index, name2change);
+	_updateList.changeColumnName(index, name2change);
+	_installedList.changeColumnName(index, name2change);
+}
+
+void PluginViewList::changeColumnName(COLUMN_TYPE index, const TCHAR *name2change)
+{
+	_ui.setColumnText(index, name2change);
+}
+
 bool PluginViewList::removeFromFolderName(const generic_string& folderName)
 {
 
@@ -609,7 +620,10 @@ void PluginViewList::pushBack(PluginUpdateInfo* pi)
 	Version v = pi->_version;
 	values2Add.push_back(v.toString());
 	//values2Add.push_back(TEXT("Yes"));
-	_ui.addLine(values2Add, reinterpret_cast<LPARAM>(pi));
+
+	// add in order
+	size_t i = _ui.findAlphabeticalOrderPos(pi->_displayName, _sortType == DISPLAY_NAME_ALPHABET_ENCREASE ? _ui.sortEncrease : _ui.sortDecrease);
+	_ui.addLine(values2Add, reinterpret_cast<LPARAM>(pi), static_cast<int>(i));
 }
 
 bool loadFromJson(PluginViewList & pl, const json& j)
@@ -685,12 +699,18 @@ typedef const char * (__cdecl * PFUNCGETPLUGINLIST)();
 
 bool PluginsAdminDlg::isValide()
 {
+	// GUP.exe doesn't work under XP
+	winVer winVersion = (NppParameters::getInstance())->getWinVersion();
+	if (winVersion <= WV_XP)
+	{
+		return false;
+	}
+
 	if (!::PathFileExists(_pluginListFullPath.c_str()))
 	{
 		return false;
 	}
 
-	generic_string gupPath;
 	if (!::PathFileExists(_updaterFullPath.c_str()))
 	{
 		return false;
@@ -704,11 +724,13 @@ bool PluginsAdminDlg::isValide()
 
 	// check the signature on default location : %APPDATA%\Notepad++\plugins\config\pl\nppPluginList.dll or NPP_INST_DIR\plugins\config\pl\nppPluginList.dll
 	
-	bool isOK = VerifySignedLibrary(_pluginListFullPath.c_str(), NPP_COMPONENT_SIGNER_KEY_ID, NPP_COMPONENT_SIGNER_SUBJECT, NPP_COMPONENT_SIGNER_DISPLAY_NAME, false, false, false);
+	SecurityGard securityGard;
+	bool isOK = securityGard.checkModule(_pluginListFullPath, nm_pluginList);
+
 	if (!isOK)
 		return isOK;
 
-	isOK = VerifySignedLibrary(_updaterFullPath.c_str(), NPP_COMPONENT_SIGNER_KEY_ID, NPP_COMPONENT_SIGNER_SUBJECT, NPP_COMPONENT_SIGNER_DISPLAY_NAME, false, false, false);
+	isOK = securityGard.checkModule(_updaterFullPath, nm_gup);
 	return isOK;
 #endif
 }
@@ -732,7 +754,8 @@ bool PluginsAdminDlg::updateListAndLoadFromJson()
 
 #else //RELEASE
 
-		hLib = ::LoadLibrary(_pluginListFullPath.c_str());
+		hLib = ::LoadLibraryEx(_pluginListFullPath.c_str(), 0, LOAD_LIBRARY_AS_DATAFILE_EXCLUSIVE);
+
 		if (!hLib)
 		{
 			// Error treatment
@@ -740,19 +763,30 @@ bool PluginsAdminDlg::updateListAndLoadFromJson()
 			return false;
 		}
 
-		PFUNCGETPLUGINLIST pGetListFunc = (PFUNCGETPLUGINLIST)GetProcAddress(hLib, "getList");
-		if (!pGetListFunc)
+		HRSRC rc = ::FindResource(hLib, MAKEINTRESOURCE(IDR_PLUGINLISTJSONFILE), MAKEINTRESOURCE(TEXTFILE));
+		if (!rc)
 		{
-			// Error treatment
-			//printStr(TEXT("getList PB!!!"));
 			::FreeLibrary(hLib);
 			return false;
 		}
 
-		const char* pl = pGetListFunc();
-		//MessageBoxA(NULL, pl, "", MB_OK);
+		HGLOBAL rcData = ::LoadResource(hLib, rc);
+		if (!rcData)
+		{
+			::FreeLibrary(hLib);
+			return false;
+		}
 
-		j = j.parse(pl);
+		auto size = ::SizeofResource(hLib, rc);
+		auto data = static_cast<const char*>(::LockResource(rcData));
+
+		char* buffer = new char[size + 1];
+		::memcpy(buffer, data, size);
+		buffer[size] = '\0';
+
+		j = j.parse(buffer);
+
+		delete[] buffer;
 
 #endif
 		// if absent then download it
@@ -802,7 +836,7 @@ bool PluginsAdminDlg::loadFromPluginInfos()
 
 		// user file name (without ext. to find whole info in available list
 		TCHAR fnNoExt[MAX_PATH];
-		lstrcpy(fnNoExt, i._fileName.c_str());
+		wcscpy_s(fnNoExt, i._fileName.c_str());
 		::PathRemoveExtension(fnNoExt);
 
 		int listIndex;
@@ -970,7 +1004,7 @@ bool PluginsAdminDlg::searchInPlugins(bool isNextMode) const
 {
 	const int maxLen = 256;
 	TCHAR txt2search[maxLen];
-	::GetDlgItemText(_hSelf, IDC_PLUGINADM_RESEARCH_EDIT, txt2search, maxLen);
+	::GetDlgItemText(_hSelf, IDC_PLUGINADM_SEARCH_EDIT, txt2search, maxLen);
 	if (lstrlen(txt2search) < 2)
 		return false;
 
@@ -1073,7 +1107,6 @@ INT_PTR CALLBACK PluginsAdminDlg::run_dlgProc(UINT message, WPARAM wParam, LPARA
 	{
         case WM_INITDIALOG :
 		{
-
 			return TRUE;
 		}
 
@@ -1083,7 +1116,7 @@ INT_PTR CALLBACK PluginsAdminDlg::run_dlgProc(UINT message, WPARAM wParam, LPARA
 			{
 				switch (LOWORD(wParam))
 				{
-					case  IDC_PLUGINADM_RESEARCH_EDIT:
+					case  IDC_PLUGINADM_SEARCH_EDIT:
 					{
 						searchInPlugins(false);
 						return TRUE;

@@ -45,12 +45,6 @@ using namespace std;
 #define WM_DPICHANGED 0x02E0
 
 
-DWORD WINAPI CheckModifiedDocumentThread(LPVOID)
-{
-	MainFileManager->checkFilesystemChanges();
-	return 0;
-}
-
 struct SortTaskListPred final
 {
 	DocTabView *_views[2];
@@ -261,7 +255,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			_pEditView->getGenericSelectedText(str, strSize);
 			_findReplaceDlg.setSearchText(str);
 			if (isFirstTime)
-				_nativeLangSpeaker.changeDlgLang(_findReplaceDlg.getHSelf(), "Find");
+				_nativeLangSpeaker.changeFindReplaceDlgLang(_findReplaceDlg);
 			_findReplaceDlg.launchFindInFilesDlg();
 			setFindReplaceFolderFilter(reinterpret_cast<const TCHAR*>(wParam), reinterpret_cast<const TCHAR*>(lParam));
 
@@ -688,7 +682,8 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 		{
 			TCHAR str[MAX_PATH];
 			// par defaut : NPPM_GETCURRENTDIRECTORY
-			TCHAR *fileStr = lstrcpy(str, _pEditView->getCurrentBuffer()->getFullPathName());
+			wcscpy_s(str, _pEditView->getCurrentBuffer()->getFullPathName());
+			TCHAR* fileStr = str;
 
 			if (message == NPPM_GETCURRENTDIRECTORY)
 				PathRemoveFileSpec(str);
@@ -708,8 +703,6 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			{
 				if (lstrlen(fileStr) >= int(wParam))
 				{
-					// Not message for users so no translation
-					::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM error"), MB_OK);
 					return FALSE;
 				}
 			}
@@ -730,8 +723,6 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			{
 				if (lstrlen(str) >= int(wParam))	//buffer too small
 				{
-					// Not message for users so no translation
-					::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM_GETCURRENTWORD error"), MB_OK);
 					return FALSE;
 				}
 				else //buffer large enough, perform safe copy
@@ -787,8 +778,6 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 			if (lstrlen(str) >= int(wParam))	//buffer too small
 			{
-				// Not message for users so no translation
-				::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM_GETFILENAMEATCURSOR error"), MB_OK);
 				return FALSE;
 			}
 			else //buffer large enough, perform safe copy
@@ -815,8 +804,6 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			{
 				if (lstrlen(str) >= int(wParam))
 				{
-					// Not message for users so no translation
-					::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM_GETNPPDIRECTORY error"), MB_OK);
 					return FALSE;
 				}
 			}
@@ -1364,11 +1351,8 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 		{
 			if (not wParam || not lParam) // Clean up current session
 			{
-				if (_pShortcutMapper != nullptr)
-				{
-					delete _pShortcutMapper;
-					_pShortcutMapper = nullptr;
-				}
+				delete _pShortcutMapper;
+				_pShortcutMapper = nullptr;
 				return TRUE;
 			}
 
@@ -1548,10 +1532,23 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_INTERNAL_CHECKDOCSTATUS:
 		{
+			// This is an workaround to deal with Microsoft issue in ReadDirectoryChanges notification
+			// If command prompt is used to write file continuously (e.g. ping -t 8.8.8.8 > ping.log)
+			// Then ReadDirectoryChanges does not detect the change.
+			// Fortunately, notification is sent if right click or double click happens on that file
+			// Let's leverage this as workaround to enhance npp file monitoring functionality.
+			// So calling "PathFileExists" is a workaround here.
+
+			Buffer* currBuf = getCurrentBuffer();
+			if (currBuf && currBuf->isMonitoringOn())
+				::PathFileExists(currBuf->getFullPathName());
+
 			const NppGUI & nppgui = pNppParam->getNppGUI();
 			if (nppgui._fileAutoDetection != cdDisabled)
 			{
-				checkModifiedDocument();
+				bool bCheckOnlyCurrentBuffer = (nppgui._fileAutoDetection & cdEnabledNew) ? true : false;
+
+				checkModifiedDocument(bCheckOnlyCurrentBuffer);
 				return TRUE;
 			}
 			return FALSE;
@@ -1568,19 +1565,6 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 		{
 			Buffer *buf = reinterpret_cast<Buffer *>(wParam);
 			monitoringStartOrStopAndUpdateUI(buf, false);
-			return TRUE;
-		}
-
-		case NPPM_INTERNAL_GETCHECKDOCOPT:
-		{
-			return (LRESULT)(pNppParam->getNppGUI())._fileAutoDetection;
-		}
-
-		case NPPM_INTERNAL_SETCHECKDOCOPT:
-		{
-			// If nothing is changed by user, then we allow to set this value
-			if ((const_cast<NppGUI &>(pNppParam->getNppGUI()))._fileAutoDetection == (pNppParam->getNppGUI())._fileAutoDetectionOriginalValue)
-				(const_cast<NppGUI &>(pNppParam->getNppGUI()))._fileAutoDetection = (ChangeDetect)wParam;
 			return TRUE;
 		}
 
@@ -1628,15 +1612,15 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_INTERNAL_ENABLECHECKDOCOPT:
 		{
-			NppGUI & nppgui = const_cast<NppGUI &>((pNppParam->getNppGUI()));
+			NppGUI& nppgui = const_cast<NppGUI&>((pNppParam->getNppGUI()));
 			if (wParam == CHECKDOCOPT_NONE)
 				nppgui._fileAutoDetection = cdDisabled;
 			else if (wParam == CHECKDOCOPT_UPDATESILENTLY)
-				nppgui._fileAutoDetection = cdAutoUpdate;
+				nppgui._fileAutoDetection = (cdEnabledOld | cdAutoUpdate);
 			else if (wParam == CHECKDOCOPT_UPDATEGO2END)
-				nppgui._fileAutoDetection = cdGo2end;
+				nppgui._fileAutoDetection = (cdEnabledOld | cdGo2end);
 			else if (wParam == (CHECKDOCOPT_UPDATESILENTLY | CHECKDOCOPT_UPDATEGO2END))
-				nppgui._fileAutoDetection = cdAutoUpdateGo2end;
+				nppgui._fileAutoDetection = (cdEnabledOld | cdGo2end | cdAutoUpdate);
 
 			return TRUE;
 		}
@@ -1854,7 +1838,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 				if (!updaterFullPath.empty())
 				{
 					Process updater(updaterFullPath.c_str(), pNppParam->getWingupParams().c_str(), pNppParam->getWingupDir().c_str());
-					updater.run();
+					updater.run(pNppParam->shouldDoUAC());
 				}
 			}
 			return TRUE;
@@ -1862,7 +1846,7 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case WM_ENDSESSION:
 		{
-			if(wParam == TRUE)
+			if (wParam == TRUE)
 				::DestroyWindow(hwnd);
 			return 0;
 		}
@@ -2040,25 +2024,19 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 
 		case NPPM_GETPLUGINSCONFIGDIR:
 		{
-			if (!lParam || !wParam)
-				return FALSE;
+			generic_string userPluginConfDir = pNppParam->getUserPluginConfDir();
+			if (lParam != 0)
+			{
+				if (userPluginConfDir.length() >= static_cast<size_t>(wParam))
+				{
+					return 0;
+				}
+				lstrcpy(reinterpret_cast<TCHAR *>(lParam), userPluginConfDir.c_str());
 
-			generic_string pluginsConfigDirPrefix = pNppParam->getAppDataNppDir();
-
-			if (pluginsConfigDirPrefix == TEXT(""))
-				pluginsConfigDirPrefix = pNppParam->getNppPath();
-
-			const TCHAR *secondPart = TEXT("plugins\\Config");
-
-			size_t len = wParam;
-			if (len < pluginsConfigDirPrefix.length() + lstrlen(secondPart))
-				return FALSE;
-
-			TCHAR *pluginsConfigDir = reinterpret_cast<TCHAR *>(lParam);
-			lstrcpy(pluginsConfigDir, pluginsConfigDirPrefix.c_str());
-
-			::PathAppend(pluginsConfigDir, secondPart);
-			return TRUE;
+				// For the retro-compatibility
+				return TRUE;
+			}
+			return userPluginConfDir.length();
 		}
 
 		case NPPM_GETPLUGINHOMEPATH:
@@ -2068,8 +2046,6 @@ LRESULT Notepad_plus::process(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPa
 			{
 				if (pluginHomePath.length() >= static_cast<size_t>(wParam))
 				{
-					// Not message for users so no translation
-					::MessageBox(hwnd, TEXT("Allocated buffer size is not enough to copy the string."), TEXT("NPPM_GETPLUGINHOMEPATH error"), MB_OK);
 					return 0;
 				}
 				lstrcpy(reinterpret_cast<TCHAR *>(lParam), pluginHomePath.c_str());
