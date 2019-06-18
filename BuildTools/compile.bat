@@ -5,12 +5,12 @@ echo Set repo root path to %SRCROOT%
 
 if not defined DevEnvDir (
     echo Setting up dev environment
-    call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat"
+    call "C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\VC\Auxiliary\Build\vcvars64.bat"
 )
-cd %SRCROOT%
+cd /d %SRCROOT%
 
 echo Compiling notepad++.exe
-"C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin\amd64\MSBuild.exe" ^
+"C:\Program Files (x86)\Microsoft Visual Studio\2017\Professional\MSBuild\15.0\Bin\amd64\MSBuild.exe" ^
     .\PowerEditor\visual.net\notepadPlus.vcxproj ^
     /t:rebuild /p:Configuration="Unicode Release" /v:normal /maxcpucount
 
