@@ -49,6 +49,12 @@
                     <Component Id="SciLexerLibrary" Guid="C82D338C-79F8-4C63-BA75-BB1103675880" Win64="yes">
                         <File Id="SciLexerDLL" Name="SciLexer.dll" DiskId="1" Source="SciLexer.dll" KeyPath="yes" />
                     </Component>
+                    <Component Id="LangModel" Guid="20F76A17-1865-425F-9FDF-3B0307983875" Win64="yes">
+                        <File Id="LangXML" Name="langs.model.xml" DiskId="1" Source="langs.model.xml" KeyPath="yes" />
+                    </Component>
+                    <Component Id="StylersModel" Guid="EC9EDE5B-CB4D-4EFA-BF8C-1EA771DEEE79" Win64="yes">
+                        <File Id="StylersXML" Name="stylers.model.xml" DiskId="1" Source="stylers.model.xml" KeyPath="yes" />
+                    </Component>
                 </Directory>
             </Directory>
 
@@ -66,6 +72,8 @@
         <Feature Id="Complete" Level="1">
             <ComponentRef Id="MainExecutable" />
             <ComponentRef Id="SciLexerLibrary" />
+            <ComponentRef Id="LangModel" />
+            <ComponentRef Id="StylersModel" />
             <ComponentRef Id="ProgramMenuDir" />
         </Feature>
 
